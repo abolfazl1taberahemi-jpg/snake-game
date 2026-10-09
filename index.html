@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0b1020">
+<title>Snake | بازی با رمز عبور</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    padding: 18px; font-family: Tahoma, Arial, sans-serif;
+    background: radial-gradient(circle at top, #1b2d43, #0b1020 65%);
+    color: #f3f7ff;
+  }
+  .card {
+    width: min(100%, 470px); padding: 24px; border-radius: 22px;
+    background: rgba(17, 25, 43, .94); border: 1px solid #2d405b;
+    box-shadow: 0 22px 65px #0006; text-align: center;
+  }
+  h1 { margin: 0 0 8px; font-size: clamp(25px, 6vw, 34px); }
+  .subtitle { color: #aebdd2; margin: 0 0 22px; line-height: 1.8; }
+  input {
+    width: 100%; padding: 14px; border-radius: 12px; border: 1px solid #405573;
+    background: #0b1323; color: white; font-size: 17px; text-align: center;
+    outline: none; margin-bottom: 12px;
+  }
+  input:focus { border-color: #54f59a; }
+  button {
+    border: 0; border-radius: 12px; padding: 12px 18px; font-size: 16px;
+    font-family: inherit; font-weight: bold; cursor: pointer; touch-action: manipulation;
+    background: #54f59a; color: #07150e;
+  }
+  button:active { transform: scale(.97); }
+  .secondary { background: #263851; color: #f3f7ff; }
+  .error { min-height: 24px; color: #ff8e9b; font-size: 14px; margin-top: 10px; }
+  #gameScreen { display: none; }
+  .scorebar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 14px 0; }
+  .score { font-size: 16px; color: #c8d7e9; }
+  .score strong { color: #54f59a; font-size: 22px; }
+  canvas {
+    display: block; width: 100%; aspect-ratio: 1 / 1; height: auto;
+    background: #080e18; border: 2px solid #36516b; border-radius: 12px;
+    image-rendering: pixelated; touch-action: none;
+  }
+  .actions { display: flex; gap: 10px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+  .pad { display: grid; grid-template-columns: repeat(3, 58px); grid-template-rows: repeat(2, 48px); gap: 7px; justify-content: center; margin: 16px auto 0; }
+  .pad button { padding: 5px; font-size: 22px; }
+  .up { grid-column: 2; grid-row: 1; }
+  .left { grid-column: 1; grid-row: 2; }
+  .down { grid-column: 2; grid-row: 2; }
+  .right { grid-column: 3; grid-row: 2; }
+  .hint { color: #91a4bd; font-size: 12px; line-height: 1.8; margin: 17px 0 0; }
+  .footer { color: #71849e; font-size: 12px; margin-top: 18px; }
+</style>
+</head>
+<body>
+<main class="card">
+  <section id="loginScreen">
+    <h1>🐍 بازی Snake</h1>
+    <p class="subtitle">برای ورود به بازی، رمز عبور را وارد کن.</p>
+    <form id="loginForm">
+      <input id="password" type="password" placeholder="رمز عبور" autocomplete="current-password" aria-label="رمز عبور" required>
+      <button type="submit" style="width:100%">ورود به بازی</button>
+    </form>
+    <div id="loginError" class="error" role="alert"></div>
+    <p class="hint">پروژه درس کار و فناوری</p>
+  </section>
+
+  <section id="gameScreen">
+    <h1>🐍 بازی Snake</h1>
+    <div class="scorebar">
+      <span class="score">امتیاز: <strong id="score">0</strong></span>
+      <span class="score">رکورد این نوبت: <strong id="best">0</strong></span>
+    </div>
+    <canvas id="board" width="360" height="360" aria-label="صفحه بازی مار"></canvas>
+    <p id="status" class="subtitle" style="margin:12px 0 0">برای شروع، «شروع بازی» را بزن.</p>
+    <div class="actions">
+      <button id="startBtn">شروع بازی</button>
+      <button id="logoutBtn" class="secondary">خروج</button>
+    </div>
+    <div class="pad" aria-label="دکمه‌های حرکت">
+      <button class="up secondary" data-dir="up" aria-label="بالا">⬆</button>
+      <button class="left secondary" data-dir="left" aria-label="چپ">⬅</button>
+      <button class="down secondary" data-dir="down" aria-label="پایین">⬇</button>
+      <button class="right secondary" data-dir="right" aria-label="راست">➡</button>
+    </div>
+    <p class="hint">با کلیدهای جهت‌دار صفحه‌کلید یا دکمه‌های روی صفحه حرکت کن. غذاهای قرمز را بخور و به دیوار یا بدن خودت برخورد نکن!</p>
+  </section>
+  <div class="footer">ساخته‌شده برای درس کار و فناوری</div>
+</main>
+
+<script>
+  // توجه: این رمز در کد صفحه قرار دارد؛ برای امنیت واقعی باید ورود در سرور بررسی شود.
+  const PASSWORD = "Abolfazl";
+
+  const loginScreen = document.getElementById("loginScreen");
+  const gameScreen = document.getElementById("gameScreen");
+  const passwordInput = document.getElementById("password");
+  const loginError = document.getElementById("loginError");
+  const canvas = document.getElementById("board");
+  const ctx = canvas.getContext("2d");
+  const scoreEl = document.getElementById("score");
+  const bestEl = document.getElementById("best");
+  const statusEl = document.getElementById("status");
+  const CELL = 18, COUNT = canvas.width / CELL;
+  let snake = [], food = {x: 5, y: 5}, dx = 1, dy = 0, nextDx = 1, nextDy = 0;
+  let score = 0, best = 0, timer = null, running = false, ended = false;
+
+  document.getElementById("loginForm").addEventListener("submit", e => {
+    e.preventDefault();
+    if (passwordInput.value === PASSWORD) {
+      loginScreen.style.display = "none";
+      gameScreen.style.display = "block";
+      loginError.textContent = "";
+      passwordInput.value = "";
+      draw();
+    } else {
+      loginError.textContent = "رمز عبور اشتباه است. دوباره امتحان کن.";
+      passwordInput.select();
+    }
+  });
+
+  function startGame() {
+    clearInterval(timer);
+    snake = [{x: 10, y: 10}, {x: 9, y: 10}, {x: 8, y: 10}];
+    dx = nextDx = 1; dy = nextDy = 0;
+    score = 0; running = true; ended = false;
+    scoreEl.textContent = "0";
+    statusEl.textContent = "بازی شروع شد؛ موفق باشی!";
+    spawnFood(); draw();
+    timer = setInterval(update, 115);
+  }
+
+  function spawnFood() {
+    do {
+      food = {x: Math.floor(Math.random() * COUNT), y: Math.floor(Math.random() * COUNT)};
+    } while (snake.some(p => p.x === food.x && p.y === food.y));
+  }
+
+  function setDirection(dir) {
+    if (!running) return;
+    if (dir === "up" && dy !== 1) { nextDx = 0; nextDy = -1; }
+    if (dir === "down" && dy !== -1) { nextDx = 0; nextDy = 1; }
+    if (dir === "left" && dx !== 1) { nextDx = -1; nextDy = 0; }
+    if (dir === "right" && dx !== -1) { nextDx = 1; nextDy = 0; }
+  }
+
+  document.addEventListener("keydown", e => {
+    const map = {ArrowUp:"up", ArrowDown:"down", ArrowLeft:"left", ArrowRight:"right",
+                 w:"up", s:"down", a:"left", d:"right"};
+    if (map[e.key]) {
+      if (gameScreen.style.display === "block") e.preventDefault();
+      setDirection(map[e.key]);
+    }
+  });
+  document.querySelectorAll("[data-dir]").forEach(btn => {
+    btn.addEventListener("click", () => setDirection(btn.dataset.dir));
+  });
+  document.getElementById("startBtn").addEventListener("click", startGame);
+
+  function update() {
+    dx = nextDx; dy = nextDy;
+    const head = {x: snake[0].x + dx, y: snake[0].y + dy};
+    const eating = head.x === food.x && head.y === food.y;
+    const bodyToCheck = eating ? snake : snake.slice(0, -1);
+    if (head.x < 0 || head.x >= COUNT || head.y < 0 || head.y >= COUNT ||
+        bodyToCheck.some(p => p.x === head.x && p.y === head.y)) {
+      endGame(); return;
+    }
+    snake.unshift(head);
+    if (eating) {
+      score += 10; best = Math.max(best, score);
+      scoreEl.textContent = score; bestEl.textContent = best;
+      spawnFood();
+      if (snake.length === COUNT * COUNT) { endGame("برنده شدی! تمام صفحه را پر کردی."); return; }
+    } else snake.pop();
+    draw();
+  }
+
+  function draw() {
+    ctx.fillStyle = "#080e18"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // خطوط ظریف صفحه
+    ctx.strokeStyle = "#111d2c"; ctx.lineWidth = 1;
+    for (let i = 0; i <= COUNT; i++) {
+      ctx.beginPath(); ctx.moveTo(i * CELL, 0); ctx.lineTo(i * CELL, canvas.height); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i * CELL); ctx.lineTo(canvas.width, i * CELL); ctx.stroke();
+    }
+    ctx.fillStyle = "#ff526b";
+    ctx.beginPath(); ctx.arc(food.x * CELL + CELL/2, food.y * CELL + CELL/2, CELL * .38, 0, Math.PI*2); ctx.fill();
+    snake.forEach((p, i) => {
+      ctx.fillStyle = i === 0 ? "#b8ffd4" : "#54f59a";
+      ctx.beginPath(); ctx.roundRect(p.x * CELL + 1, p.y * CELL + 1, CELL - 2, CELL - 2, 5); ctx.fill();
+    });
+  }
+
+  function endGame(message) {
+    clearInterval(timer); running = false; ended = true;
+    statusEl.textContent = message || ("بازی تمام شد! امتیاز نهایی: " + score);
+    draw();
+  }
+
+  document.getElementById("logoutBtn").addEventListener("click", () => {
+    clearInterval(timer); running = false;
+    gameScreen.style.display = "none"; loginScreen.style.display = "block";
+    statusEl.textContent = "برای شروع، «شروع بازی» را بزن.";
+  });
+  draw();
+</script>
+</body>
+</html>
